@@ -4,7 +4,7 @@
 int main()
 {
 	try {
-		CXDylib::Library lib("CXLibTest.dll", CXDylib::LibraryBehavior::UnloadOnDestruct);
+		cxlib lib("CXLibTest.dll", CXDylib::LibraryBehavior::UnloadOnDestruct);
 		auto print = lib.GetFunction<int>("DllPrint");
 		print("Hello, world!");
 	}

@@ -8,119 +8,124 @@
 #include <Windows.h>
 #endif
 
-namespace CXDylib
+namespace CX
 {
-#ifdef CXDL_WINDOWS
-	typedef HMODULE Handle;
-
-	// Windows library loader
-	class Win32Library
+	namespace Dylib
 	{
-	public:
-		Win32Library(const std::string& name) {
-			mHandle = LoadLibraryA(name.c_str());
-		}
-		void UnloadLibrary() {
-			FreeLibrary(mHandle);
-		}
-		void* GetSymbol(const std::string& symbol) const {
-			return GetProcAddress(mHandle, symbol.c_str());
-		}
-	private:
-		Handle mHandle;
-	};
-	using LibraryImpl = Win32Library;
+#ifdef CXDL_WINDOWS
+		typedef HMODULE Handle;
+
+		// Windows library loader
+		class Win32Library
+		{
+		public:
+			Win32Library(const std::string& name) {
+				mHandle = LoadLibraryA(name.c_str());
+			}
+			void UnloadLibrary() {
+				FreeLibrary(mHandle);
+			}
+			void* GetSymbol(const std::string& symbol) const {
+				return GetProcAddress(mHandle, symbol.c_str());
+			}
+		private:
+			Handle mHandle;
+		};
+		using LibraryImpl = Win32Library;
 #endif
 
-	class DeadLibraryException : public std::exception
-	{
-	public:
-		DeadLibraryException(const std::string& libname)
+		class DeadLibraryException : public std::exception
 		{
-			mDescription = "DeadLibraryException: Library '" + libname + "' was accessed after being unloaded.";
-		}
-		const char* what() const {
-			return mDescription.c_str();
-		}
-	private:
-		std::string mDescription;
-	};
-	class InvalidSymbolException : public std::exception
-	{
-	public:
-		InvalidSymbolException(const std::string& symname, const std::string& libname)
+		public:
+			DeadLibraryException(const std::string& libname)
+			{
+				mDescription = "DeadLibraryException: Library '" + libname + "' was accessed after being unloaded.";
+			}
+			const char* what() const {
+				return mDescription.c_str();
+			}
+		private:
+			std::string mDescription;
+		};
+		class InvalidSymbolException : public std::exception
 		{
-			mDescription = "InvalidSymbolException: Symbol '" + symname + "' in library '" + libname + "' does not exist.";
-		}
-		const char* what() const {
-			return mDescription.c_str();
-		}
-	private:
-		std::string mDescription;
-	};
+		public:
+			InvalidSymbolException(const std::string& symname, const std::string& libname)
+			{
+				mDescription = "InvalidSymbolException: Symbol '" + symname + "' in library '" + libname + "' does not exist.";
+			}
+			const char* what() const {
+				return mDescription.c_str();
+			}
+		private:
+			std::string mDescription;
+		};
 
-	enum class LibraryBehavior
-	{
-		UnloadManually,
-		UnloadOnDestruct
-	};
+		enum class LibraryBehavior
+		{
+			UnloadManually,
+			UnloadOnDestruct
+		};
 
-	class Library : public LibraryImpl
-	{
-	public:
-		Library() = delete;
-		Library(const std::string& name, const LibraryBehavior behavior = LibraryBehavior::UnloadManually)
-			: LibraryImpl(name), mLibraryName(name), mBehavior(behavior), mValid(true) {}
-		~Library() {
-			if (mBehavior == LibraryBehavior::UnloadOnDestruct)
-				UnloadLibrary();
-		}
+		class Library : public LibraryImpl
+		{
+		public:
+			Library() = delete;
+			Library(const std::string& name, const LibraryBehavior behavior = LibraryBehavior::UnloadManually)
+				: LibraryImpl(name), mLibraryName(name), mBehavior(behavior), mValid(true) {}
+			~Library() {
+				if (mBehavior == LibraryBehavior::UnloadOnDestruct)
+					UnloadLibrary();
+			}
 
-		void Unload() { UnloadLibrary(); mValid = false; }
+			void Unload() { UnloadLibrary(); mValid = false; }
 
-		template<typename ReturnType>
-		using Function = ReturnType(*)(...);
+			template<typename ReturnType>
+			using Function = ReturnType(*)(...);
 
-		// Calling arbitrary functions
-		template<typename ReturnType>
-		Function<ReturnType> GetFunction(const std::string& symname) {
-			if (!mValid)
-				throw DeadLibraryException(mLibraryName);
+			// Calling arbitrary functions
+			template<typename ReturnType>
+			Function<ReturnType> GetFunction(const std::string& symname) {
+				if (!mValid)
+					throw DeadLibraryException(mLibraryName);
 
-			auto fcn = (Function<ReturnType>) GetSymbol(symname);
-			if (!fcn)
-				throw InvalidSymbolException(symname, mLibraryName);
-			return fcn;
-		}
+				auto fcn = (Function<ReturnType>) GetSymbol(symname);
+				if (!fcn)
+					throw InvalidSymbolException(symname, mLibraryName);
+				return fcn;
+			}
 
-		// Getting globals
-		template<typename GlobalType>
-		GlobalType& GetGlobal (const std::string& symname) {
-			if (!mValid)
-				throw DeadLibraryException(mLibraryName);
+			// Getting globals
+			template<typename GlobalType>
+			GlobalType& GetGlobal(const std::string& symname) {
+				if (!mValid)
+					throw DeadLibraryException(mLibraryName);
 
-			const auto pSym = (GlobalType*) GetSymbol(symname);
-			if (!pSym)
-				throw InvalidSymbolException(symname, mLibraryName);
-			return *pSym;
-		}
+				const auto pSym = (GlobalType*)GetSymbol(symname);
+				if (!pSym)
+					throw InvalidSymbolException(symname, mLibraryName);
+				return *pSym;
+			}
 
-		// Getting globals (const overload)
-		template<typename GlobalType>
-		const GlobalType& GetGlobal (const std::string& symname) const {
-			if (!mValid)
-				throw DeadLibraryException(mLibraryName);
+			// Getting globals (const overload)
+			template<typename GlobalType>
+			const GlobalType& GetGlobal(const std::string& symname) const {
+				if (!mValid)
+					throw DeadLibraryException(mLibraryName);
 
-			const auto pSym = (GlobalType*) GetSymbol(symname);
-			if(!pSym)
-				throw InvalidSymbolException(symname, mLibraryName);
-			return *pSym;
-		}
-	private:
-		std::string mLibraryName;
-		LibraryBehavior mBehavior;
-		bool mValid;
-	};
+				const auto pSym = (GlobalType*)GetSymbol(symname);
+				if (!pSym)
+					throw InvalidSymbolException(symname, mLibraryName);
+				return *pSym;
+			}
+		private:
+			std::string mLibraryName;
+			LibraryBehavior mBehavior;
+			bool mValid;
+		};
+	}
 }
+namespace CXDylib = CX::Dylib;
+typedef CXDylib::Library cxlib;
 
 #undef CXDL_WINDOWS
