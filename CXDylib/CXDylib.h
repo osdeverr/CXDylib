@@ -125,7 +125,5 @@ namespace CX
 		};
 	}
 }
-namespace CXDylib = CX::Dylib;
-typedef CXDylib::Library cxlib;
 
 #undef CXDL_WINDOWS
