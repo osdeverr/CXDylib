@@ -3,9 +3,15 @@
 #include <functional>
 #include <exception>
 
-#ifdef _WIN32
+#if defined(_WIN32)
 #define CXDL_WINDOWS
 #include <Windows.h>
+#endif
+
+#if defined(__unix__) || defined(__unix) || \
+        (defined(__APPLE__) && defined(__MACH__))
+#define CXDL_UNIX
+#include <dlfcn.h>
 #endif
 
 namespace CX
@@ -32,6 +38,28 @@ namespace CX
 			Handle mHandle;
 		};
 		using LibraryImpl = Win32Library;
+#endif
+
+#ifdef CXDL_UNIX
+		typedef void* Handle;
+
+		// Unix(-like) library loader
+		class UnixLibrary
+		{
+		public:
+			UnixLibrary(const std::string& name) {
+				mHandle = dlopen(name.c_str(), RTLD_NOW);
+			}
+			void UnloadLibrary() {
+				dlclose(mHandle);
+			}
+			void* GetSymbol(const std::string& symbol) const {
+				return dlsym(mHandle, symbol.c_str());
+			}
+		private:
+			Handle mHandle;
+		};
+		using LibraryImpl = UnixLibrary;
 #endif
 
 		class DeadLibraryException : public std::exception
@@ -127,3 +155,4 @@ namespace CX
 }
 
 #undef CXDL_WINDOWS
+#undef CXDL_UNIX
